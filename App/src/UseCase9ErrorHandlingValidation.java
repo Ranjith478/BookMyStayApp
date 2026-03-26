@@ -1,121 +1,134 @@
 /**
  * Book My Stay App
- * Use Case 9: Error Handling & Validation
+ * Use Case 12: Data Persistence & System Recovery
  * @author Ranjith
- * @version 9.0
+ * @version 12.0
  */
 
+import java.io.*;
 import java.util.*;
 
-// Custom Exception
-class InvalidBookingException extends Exception {
-    public InvalidBookingException(String message) {
-        super(message);
-    }
-}
-
-// Reservation Class
-class Reservation {
+// Reservation (Serializable)
+class Reservation implements Serializable {
+    private String reservationId;
     private String guestName;
     private String roomType;
 
-    public Reservation(String guestName, String roomType) {
+    public Reservation(String reservationId, String guestName, String roomType) {
+        this.reservationId = reservationId;
         this.guestName = guestName;
         this.roomType = roomType;
     }
 
+    public String getReservationId() { return reservationId; }
     public String getGuestName() { return guestName; }
     public String getRoomType() { return roomType; }
+
+    public void display() {
+        System.out.println(reservationId + " | " + guestName + " | " + roomType);
+    }
 }
 
-// Inventory
-class RoomInventory {
+// Inventory (Serializable)
+class RoomInventory implements Serializable {
     private Map<String, Integer> inventory = new HashMap<>();
 
     public RoomInventory() {
-        inventory.put("Single Room", 1);
+        inventory.put("Single Room", 2);
         inventory.put("Double Room", 1);
     }
 
-    public boolean isValidRoomType(String type) {
-        return inventory.containsKey(type);
+    public Map<String, Integer> getInventory() {
+        return inventory;
     }
 
-    public int getAvailability(String type) {
-        return inventory.getOrDefault(type, 0);
-    }
-
-    public void reduceRoom(String type) throws InvalidBookingException {
-        int count = getAvailability(type);
-
-        if (count <= 0) {
-            throw new InvalidBookingException("No rooms available for " + type);
-        }
-
-        inventory.put(type, count - 1);
-    }
-}
-
-// Validator
-class BookingValidator {
-
-    public static void validate(Reservation r, RoomInventory inventory)
-            throws InvalidBookingException {
-
-        if (r.getGuestName() == null || r.getGuestName().isEmpty()) {
-            throw new InvalidBookingException("Guest name cannot be empty");
-        }
-
-        if (!inventory.isValidRoomType(r.getRoomType())) {
-            throw new InvalidBookingException("Invalid room type: " + r.getRoomType());
-        }
-
-        if (inventory.getAvailability(r.getRoomType()) <= 0) {
-            throw new InvalidBookingException("No availability for " + r.getRoomType());
+    public void display() {
+        System.out.println("\nInventory:");
+        for (String type : inventory.keySet()) {
+            System.out.println(type + " -> " + inventory.get(type));
         }
     }
 }
 
-// Booking Service
-class BookingService {
+// Wrapper Class for Persistence
+class SystemState implements Serializable {
+    List<Reservation> bookings;
+    RoomInventory inventory;
 
-    public void processBooking(Reservation r, RoomInventory inventory) {
+    public SystemState(List<Reservation> bookings, RoomInventory inventory) {
+        this.bookings = bookings;
+        this.inventory = inventory;
+    }
+}
 
-        try {
-            BookingValidator.validate(r, inventory);
+// Persistence Service
+class PersistenceService {
 
-            inventory.reduceRoom(r.getRoomType());
+    private static final String FILE_NAME = "system_state.ser";
 
-            System.out.println("Booking Confirmed for " + r.getGuestName() +
-                    " | Room: " + r.getRoomType());
+    // Save state
+    public static void save(SystemState state) {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(FILE_NAME))) {
+            oos.writeObject(state);
+            System.out.println("\nState saved successfully.");
+        } catch (IOException e) {
+            System.out.println("Error saving state: " + e.getMessage());
+        }
+    }
 
-        } catch (InvalidBookingException e) {
-            System.out.println("Booking Failed: " + e.getMessage());
+    // Load state
+    public static SystemState load() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(FILE_NAME))) {
+            System.out.println("State loaded successfully.");
+            return (SystemState) ois.readObject();
+        } catch (Exception e) {
+            System.out.println("No previous state found. Starting fresh.");
+            return null;
         }
     }
 }
 
-// Main Class
-class UseCase9ErrorHandlingValidation {
+// Main
+class UseCase12DataPersistenceRecovery {
 
     public static void main(String[] args) {
 
         System.out.println("==========================================");
         System.out.println("        BOOK MY STAY APPLICATION          ");
         System.out.println("==========================================");
-        System.out.println("Version : v9.0");
+        System.out.println("Version : v12.0");
         System.out.println("------------------------------------------");
 
-        RoomInventory inventory = new RoomInventory();
-        BookingService service = new BookingService();
+        // Try loading previous state
+        SystemState state = PersistenceService.load();
 
-        // Test cases
-        service.processBooking(new Reservation("Alice", "Single Room"), inventory);
-        service.processBooking(new Reservation("", "Double Room"), inventory); // invalid name
-        service.processBooking(new Reservation("Bob", "Suite Room"), inventory); // invalid type
-        service.processBooking(new Reservation("Charlie", "Single Room"), inventory); // no availability
+        List<Reservation> bookings;
+        RoomInventory inventory;
+
+        if (state != null) {
+            bookings = state.bookings;
+            inventory = state.inventory;
+        } else {
+            bookings = new ArrayList<>();
+            inventory = new RoomInventory();
+
+            // Simulate new bookings
+            bookings.add(new Reservation("SR-101", "Alice", "Single Room"));
+            bookings.add(new Reservation("DR-102", "Bob", "Double Room"));
+        }
+
+        // Display current state
+        System.out.println("\n--- Booking History ---");
+        for (Reservation r : bookings) {
+            r.display();
+        }
+
+        inventory.display();
+
+        // Save state before exit
+        PersistenceService.save(new SystemState(bookings, inventory));
 
         System.out.println("\n==========================================");
-        System.out.println("Validation completed.");
+        System.out.println("System ready with persisted state.");
     }
 }
